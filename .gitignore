@@ -1,0 +1,11 @@
+/.metadata/
+.project
+.pydevproject
+.ipynb_checkpoints
+/RemoteSystemsTempFiles
+/src/data
+/src/data_lesson
+/src/scratch.py
+/src/.DS_Store
+/src/saves
+.DS_Store
