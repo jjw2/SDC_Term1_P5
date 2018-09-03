@@ -6,14 +6,14 @@ import math
 
 ########## PLOTTING UTILITIES ##########
 
-def plot_imgs(X, title=[], cols = 2, cmap='brg', h_mult = 2):
+def plot_imgs(X, title=[], cols = 2, cmap='brg', h_mult = 2.5):
     
     num_cols = cols
     num_plots = len(X)
     num_rows = int(math.ceil(num_plots/2))
     
     plotNum = 1
-    plt.figure(figsize = (16, num_rows*h_mult))
+    plt.figure(figsize = (12, num_rows*h_mult))
     for i in range(num_plots):
         plt.subplot(num_rows, num_cols, plotNum)
         plt.imshow(X[i], cmap=cmap)
@@ -68,7 +68,6 @@ test_idx = 2;
 image = mpimg.imread(veh_imgs[test_idx])
 
 print("Image size:", image.shape)
-print("Image values;", image[0:10])
 
 gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
@@ -121,6 +120,8 @@ def extract_features(imgs, cspace='RGB', orient=9,
                 feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
             elif cspace == 'YCrCb':
                 feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
+            elif cspace == 'HSV':
+                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
         else: feature_image = np.copy(image)      
 
         # Call get_hog_features() with vis=False, feature_vec=True
@@ -150,7 +151,7 @@ import time
 import pickle
 
 # Feature extraction parameters
-colorspace = 'YUV' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+colorspace = 'HSV' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
 orient = 12
 pix_per_cell = 16
 cell_per_block = 2
@@ -253,8 +254,10 @@ raw_imgs = []
 
 for time in times:
     raw_imgs.append(clip1.get_frame(time))
-    
-plot_imgs(raw_imgs, cols=3)
+
+plot0 = False
+if plot0:
+    plot_imgs(raw_imgs, cols=3)
 
 
 # Helper function to draw bounding boxes
@@ -295,6 +298,8 @@ def convert_color(img, conv='RGB2YCrCb'):
         return cv2.cvtColor(img, cv2.COLOR_RGB2LUV)
     if conv == 'RGB2YUV':
         return cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
+    if conv == 'RGB2HSV':
+        return cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
 
 def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
@@ -318,7 +323,7 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
         #print("scale", scale)
         
         img_tosearch = img[ystart:ystop,:,:]
-        ctrans_tosearch = convert_color(img_tosearch, conv='RGB2YUV')
+        ctrans_tosearch = convert_color(img_tosearch, conv='RGB2HSV')
         #plt.imshow(ctrans_tosearch)
         #plt.show()
         
@@ -396,7 +401,7 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
 
 
 # Some of this was defined above, but redefining here for ease of use/clarity
-colorspace = 'YUV'
+colorspace = 'HSV'
 orient = 12
 pix_per_cell = 16
 cell_per_block = 2
@@ -451,7 +456,7 @@ def add_heat(heatmap, bbox_list):
     return heatmap# Iterate through list of bboxes
 
 
-def apply_threshold(heatmap, threshold):
+def heat_threshold(heatmap, threshold):
     # Zero out pixels below the threshold
     heatmap[heatmap <= threshold] = 0
     # Return thresholded map
@@ -476,7 +481,6 @@ def draw_labeled_bboxes(img, labels):
     return output
 
 
-
 heatmap_imgs = []
 label_imgs = []
 for i in range(len(hit_boxes)):
@@ -485,17 +489,157 @@ for i in range(len(hit_boxes)):
     
     heat = np.zeros_like(img[:,:,0]).astype(np.float)
     heat = add_heat(heat, rects)
-    heat = apply_threshold(heat, 2)
+    heat = heat_threshold(heat, 1)
     heatmap =  np.clip(heat, 0, 255)
     heatmap_imgs.append(heatmap)
     labels = label(heatmap)
     label_imgs.append(draw_labeled_bboxes(raw_imgs[i], labels))
-    
-    
 
-plot4 = True
+
+plot4 = False
 if plot4:   
     plot_imgs(heatmap_imgs, cols=3)
     plot_imgs(label_imgs, cols=3)
+    
 
+# Combine above functions into one function
+def create_labels(img, rects, thresh):
+    heat = np.zeros_like(img[:,:,0]).astype(np.float)
+    heat = add_heat(heat, rects)
+    heat = heat_threshold(heat, thresh)
+    heatmap =  np.clip(heat, 0, 255)
+    labels = label(heatmap)
+    output = draw_labeled_bboxes(img, labels)
+    return output 
+    
+    
+########## CREATE CLASS TO TRACK VEHICLES ##########
+"""
+The VehicleTracker class below is sloppy in that its using a several functions that are not
+a part of the class (i.e.: all the functions above). Ideally, I would make all of these functions 
+class methods, but at this point, and given that I developed the above code step-by-step as I 
+progressed through the lessons, I'm goign to leave it as is. If this were to be deployed, I would
+enforce proper encapsulation.  
+"""
+
+class VehicleTracker:
+    def __init__(self, classifier, scaler):
+        
+        # Pass the classifier and scaler as initialization arguments.
+        self.classifier = classifier
+        self.scaler = scaler
+        
+        # HOG parameters - duplicated from above
+        self.colorspace = 'HSV'
+        self.orient = 12
+        self.pix_per_cell = 16
+        self.cell_per_block = 2
+        self.hog_channel = "ALL"
+        self.scale_params = [[400, 464, 1.0],  # Scale 1.0 -> search rectangle is 64x64 pixels.
+                            [420, 490, 1.0],
+                            [390, 500, 1.5], # Scale 1.5 -> search rectangle is 96x96 pixels.
+                            [425, 535, 1.5],
+                            [400, 530, 2.0], # Scale 2.0 -> search rectangle is 128x128 pixels.
+                            [450, 580, 2.0],
+                            [420, 590, 2.5], # Scale 2.5 -> search rectangle is 160x160 pixels.
+                            [480, 650, 2.5],
+                            [430, 630, 3.0], # Scale 3.0 -> search rectangle is 192x192 pixels.
+                            [510, 720, 3.0]]
+        
+        # Heat map threshold for an individual image
+        self.frame_heat_thresh = 4
+        
+        # Heat map thershold for heat accumulation acros frames
+        self.temporal_heat_thresh = 40
+
+        # Labels from last good run
+        self.labels = None
+        
+        # Size of history buffer
+        self.hist_buff_size = 15
+        self.rect_hist = [] # this will end up being a list of lists...
+        
+
+
+    # Returns bounding boxes for an individual image
+    def get_rects(self, img):
+        rects, _ = find_cars(img, self.scale_params, self.classifier, self.scaler, self.orient, self.pix_per_cell, self.cell_per_block)
+        return rects
+    
+    def push_rects(self, rects):
+        # Add rectangles to buffer
+        self.rect_hist.append(rects)
+        
+        # Throw out first list element if buffer is full
+        if(len(self.rect_hist) > self.hist_buff_size):
+            self.rect_hist = self.rect_hist[1:]
+    
+    def proc_img(self, img):
+        # Get rectangles
+        frame_rects = self.get_rects(img)
+        
+        # If we found recangles in this frame, do things
+        if (len(frame_rects) > 0):
+            self.push_rects(frame_rects)
+        
+            # Heatmap for accumulating heat across frames
+            heatmap = np.zeros_like(img[:,:,0]).astype(np.float)
+            
+            """
+            plt.figure()
+            plt.title("Init heat map")
+            plt.imshow(heatmap)
+            plt.show()
+            """
+            
+            # Loop through rectangle history and create heat map
+            for frame_rects in self.rect_hist: 
+                heatmap = add_heat(heatmap, frame_rects)
+            
+            """
+            plt.figure()
+            plt.title("After heat map")
+            plt.imshow(heatmap)
+            plt.show()
+            """
+            
+            heatmap = heat_threshold(heatmap, self.temporal_heat_thresh)
+            heatmap = np.clip(heatmap, 0, 255)
+            
+
+            
+            self.labels = label(heatmap)
+        
+        if self.labels is not None:
+            output = draw_labeled_bboxes(img, self.labels)
+        else:
+            output = img
+            
+        return output
+
+
+
+
+
+tracker = VehicleTracker(svc, X_scaler)
+
+"""
+output_file1 = 'project_video_output.mp4'
+output_clip1 = clip1.fl_image(lambda image: proc_img(image, scale_params, svc, X_scaler, orient, pix_per_cell, cell_per_block, heat_thresh)).subclip(21,30)
+output_clip1.write_videofile(output_file1, audio=False)
+"""
+output_file1 = 'project_video_output_4_30_10.mp4'
+output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image))#.subclip(20, 23)
+output_clip1.write_videofile(output_file1, audio=False)
+
+
+"""
+TEST SUMMARY
+
+[frame thresh, temporal thresh, hist buff size]
+
+[4, 40, 15]
+- works decently, but false fails in shadows near end of video
+- focus is mostly on back of car
+- box is jittery; may need to implement a filter on box size
 
