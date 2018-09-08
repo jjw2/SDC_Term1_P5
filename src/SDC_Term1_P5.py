@@ -3,6 +3,7 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import math
+from dask.array.ufunc import floor
 
 ########## PLOTTING UTILITIES ##########
 
@@ -151,16 +152,26 @@ import time
 import pickle
 
 # Feature extraction parameters
-colorspace = 'HSV' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
-orient = 12
-pix_per_cell = 16
-cell_per_block = 2
+
+LOAD = True
+VIDEO = True
+
+HOG_COLOR = "YUV"
+HOG_ORIENT = 11
+HOG_PIX = 16
+HOG_CELLS = 2
+
+
+colorspace = HOG_COLOR # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+orient = HOG_ORIENT
+pix_per_cell = HOG_PIX
+cell_per_block = HOG_CELLS
 hog_channel = "ALL" # Can be 0, 1, 2, or "ALL"
 
 print('Using:',orient,'orientations',pix_per_cell,
     'pixels per cell and', cell_per_block,'cells per block')
 
-load_feat = True
+load_feat = LOAD
 feat_filename = "saves/features.pkl"
 
 if load_feat:
@@ -213,7 +224,7 @@ print('Feature vector length:', len(X_train[0]))
 ########## CLASSIFIER TRAINING ##########
 
 # choose to train or load a classifer
-load_svc = True
+load_svc = LOAD
 svc_filename = "saves/svc.pkl"
 
 if load_svc:
@@ -247,7 +258,8 @@ print('Test Accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
 from moviepy.editor import VideoFileClip
 
 # Times for frames to extract
-times = [15, 20, 25, 30, 35, 40]
+#times = [15, 20, 25, 30, 35, 40]
+times = [24.2, 24.5, 24.8, 25.1, 25.4, 25.7]
 clip1 = VideoFileClip("project_video.mp4")
 
 raw_imgs = []
@@ -317,13 +329,14 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
         ystart = param[0]
         ystop = param[1]
         scale = param[2]
+        cell_step = param[3]
         
         #print("ystart", ystart)
         #print("ystop", ystop)
         #print("scale", scale)
         
         img_tosearch = img[ystart:ystop,:,:]
-        ctrans_tosearch = convert_color(img_tosearch, conv='RGB2HSV')
+        ctrans_tosearch = convert_color(img_tosearch, conv='RGB2YUV')
         #plt.imshow(ctrans_tosearch)
         #plt.show()
         
@@ -348,10 +361,10 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
         # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
         window = 64
         nblocks_per_window = (window // pix_per_cell) - cell_per_block + 1
-        cells_per_step_x = 2  # Instead of overlap, define how many cells to step
-        cells_per_step_y = 2
-        nxsteps = (nxblocks - nblocks_per_window) // cells_per_step_x + 1
-        nysteps = (nyblocks - nblocks_per_window) // cells_per_step_y + 1
+        cells_per_step_x = cell_step  
+        cells_per_step_y = cell_step
+        nxsteps = int(floor((nxblocks - nblocks_per_window) / cells_per_step_x + 1))
+        nysteps = int(floor((nyblocks - nblocks_per_window) / cells_per_step_y + 1))
         
         #print("nxsteps:", nxsteps)
         #print("nysteps:", nysteps)
@@ -363,8 +376,8 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
         
         for xb in range(nxsteps):
             for yb in range(nysteps):
-                ypos = yb*cells_per_step_y
-                xpos = xb*cells_per_step_x
+                ypos = int(yb*cells_per_step_y)
+                xpos = int(xb*cells_per_step_x)
                 # Extract HOG for this patch
                 hog_feat1 = hog1[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
                 hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
@@ -401,26 +414,29 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
 
 
 # Some of this was defined above, but redefining here for ease of use/clarity
-colorspace = 'HSV'
-orient = 12
-pix_per_cell = 16
-cell_per_block = 2
+colorspace = HOG_COLOR
+orient = HOG_ORIENT
+pix_per_cell = HOG_PIX
+cell_per_block = HOG_CELLS
 hog_channel = "ALL" # Can be 0, 1, 2, or "ALL"
 # svc used from above
 # scaler used from above
 
-#               [ystart, ystop, scale]
-scale_params = [[400, 464, 1.0],  # Scale 1.0 -> search rectangle is 64x64 pixels.
-                [420, 490, 1.0],
-                [390, 500, 1.5], # Scale 1.5 -> search rectangle is 96x96 pixels.
-                [425, 535, 1.5],
-                [400, 530, 2.0], # Scale 2.0 -> search rectangle is 128x128 pixels.
-                [450, 580, 2.0],
-                [420, 590, 2.5], # Scale 2.5 -> search rectangle is 160x160 pixels.
-                [480, 650, 2.5],
-                [430, 630, 3.0], # Scale 3.0 -> search rectangle is 192x192 pixels.
-                [510, 720, 3.0]]
+#               [ystart, ystop, scale, cell step]
 
+scale_params = [[400, 464, 1.0, 1.0],  # Scale 1.0 -> search rectangle is 64x64 pixels.
+                [410, 480, 1.0, 1.0]]
+"""scale_params = [[400, 464, 1.0, 1.0],  # Scale 1.0 -> search rectangle is 64x64 pixels.
+                [410, 480, 1.0, 1.0]]
+                [390, 500, 1.5, 1.0], # Scale 1.5 -> search rectangle is 96x96 pixels.
+                [410, 515, 1.5, 1.0],
+                [400, 530, 2.0, 1.0], # Scale 2.0 -> search rectangle is 128x128 pixels.
+                [430, 560, 2.0, 1.0],
+                [420, 590, 2.5, 1.0], # Scale 2.5 -> search rectangle is 160x160 pixels.
+                [480, 650, 2.5, 1.0],
+                [430, 630, 3.0, 1.0], # Scale 3.0 -> search rectangle is 192x192 pixels.
+                [510, 720, 3.0, 1.0]]
+"""
 
 all_box_imgs = []
 hit_box_imgs = []
@@ -434,8 +450,8 @@ for img in raw_imgs:
     
 plot3 = False
 if plot3:
-    plot_imgs(all_box_imgs, cols=3)
-    plot_imgs(hit_box_imgs, cols=3)
+    plot_imgs(all_box_imgs, cols=2)
+    plot_imgs(hit_box_imgs, cols=2)
 
 
 
@@ -445,12 +461,12 @@ if plot3:
 
 from scipy.ndimage.measurements import label
 
-def add_heat(heatmap, bbox_list):
+def add_heat(heatmap, bbox_list, addval=1.0):
     # Iterate through list of bboxes
     for box in bbox_list:
         # Add += 1 for all pixels inside each bbox
         # Assuming each "box" takes the form ((x1, y1), (x2, y2))
-        heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
+        heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += addval
 
     # Return updated heatmap
     return heatmap# Iterate through list of bboxes
@@ -530,34 +546,35 @@ class VehicleTracker:
         self.scaler = scaler
         
         # HOG parameters - duplicated from above
-        self.colorspace = 'HSV'
-        self.orient = 12
-        self.pix_per_cell = 16
-        self.cell_per_block = 2
+        self.colorspace = HOG_COLOR
+        self.orient = HOG_ORIENT
+        self.pix_per_cell = HOG_PIX
+        self.cell_per_block = HOG_CELLS
         self.hog_channel = "ALL"
-        self.scale_params = [[400, 464, 1.0],  # Scale 1.0 -> search rectangle is 64x64 pixels.
-                            [420, 490, 1.0],
-                            [390, 500, 1.5], # Scale 1.5 -> search rectangle is 96x96 pixels.
-                            [425, 535, 1.5],
-                            [400, 530, 2.0], # Scale 2.0 -> search rectangle is 128x128 pixels.
-                            [450, 580, 2.0],
-                            [420, 590, 2.5], # Scale 2.5 -> search rectangle is 160x160 pixels.
-                            [480, 650, 2.5],
-                            [430, 630, 3.0], # Scale 3.0 -> search rectangle is 192x192 pixels.
-                            [510, 720, 3.0]]
+        self.scale_params = [[400, 480, 1.25, 0.8],  # Scale 1.0 -> search rectangle is 64x64 pixels.
+                             [410, 490, 1.25, 0.8],
+                             [380, 500, 1.5, 0.9], # Scale 1.5 -> search rectangle is 96x96 pixels.
+                             [400, 515, 1.5, 0.9],
+                             [380, 520, 1.75, 1.25], # Scale 2.0 -> search rectangle is 128x128 pixels.
+                             [415, 545, 1.75, 1.25],
+                             [390, 570, 2.0, 1.25], # Scale 2.5 -> search rectangle is 160x160 pixels.
+                             [430, 610, 2.0, 1.25],
+                             [420, 590, 2.5, 0.8], # Scale 2.5 -> search rectangle is 160x160 pixels.
+                             [480, 650, 2.5, 0.8]]
         
         # Heat map threshold for an individual image
         self.frame_heat_thresh = 4
         
         # Heat map thershold for heat accumulation acros frames
-        self.temporal_heat_thresh = 40
+        self.temporal_heat_thresh = 22
 
         # Labels from last good run
         self.labels = None
         
         # Size of history buffer
-        self.hist_buff_size = 15
+        self.hist_buff_size = 10
         self.rect_hist = [] # this will end up being a list of lists...
+        self.hist_scale = 0.6
         
 
 
@@ -573,6 +590,21 @@ class VehicleTracker:
         # Throw out first list element if buffer is full
         if(len(self.rect_hist) > self.hist_buff_size):
             self.rect_hist = self.rect_hist[1:]
+            
+
+    def accum_heat(self):
+        
+        heatmap = np.zeros_like(img[:,:,0]).astype(np.float)
+        mult = 1
+        # Loop through rectangle history and create heat map
+        # NOTE re: use of reversed here
+        for rects in reversed(self.rect_hist):
+            heatmap = add_heat(heatmap, rects, mult)
+            mult = mult*self.hist_scale
+            
+        return heatmap
+        
+        
     
     def proc_img(self, img):
         # Get rectangles
@@ -583,30 +615,25 @@ class VehicleTracker:
             self.push_rects(frame_rects)
         
             # Heatmap for accumulating heat across frames
-            heatmap = np.zeros_like(img[:,:,0]).astype(np.float)
+            
+            heatmap = self.accum_heat()
             
             """
             plt.figure()
-            plt.title("Init heat map")
-            plt.imshow(heatmap)
-            plt.show()
-            """
-            
-            # Loop through rectangle history and create heat map
-            for frame_rects in self.rect_hist: 
-                heatmap = add_heat(heatmap, frame_rects)
-            
-            """
-            plt.figure()
-            plt.title("After heat map")
+            plt.title("Before thresholding")
             plt.imshow(heatmap)
             plt.show()
             """
             
             heatmap = heat_threshold(heatmap, self.temporal_heat_thresh)
             heatmap = np.clip(heatmap, 0, 255)
-            
-
+        
+            """
+            plt.figure()
+            plt.title("After thresholding")
+            plt.imshow(heatmap)
+            plt.show()
+            """
             
             self.labels = label(heatmap)
         
@@ -621,25 +648,20 @@ class VehicleTracker:
 
 
 
-tracker = VehicleTracker(svc, X_scaler)
 
-"""
-output_file1 = 'project_video_output.mp4'
-output_clip1 = clip1.fl_image(lambda image: proc_img(image, scale_params, svc, X_scaler, orient, pix_per_cell, cell_per_block, heat_thresh)).subclip(21,30)
-output_clip1.write_videofile(output_file1, audio=False)
-"""
-output_file1 = 'project_video_output_4_30_10.mp4'
-output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image))#.subclip(20, 23)
-output_clip1.write_videofile(output_file1, audio=False)
+proc_video = VIDEO
 
+if proc_video:
+    tracker = VehicleTracker(svc, X_scaler)
+    
+    """
+    output_file1 = 'project_video_output.mp4'
+    output_clip1 = clip1.fl_image(lambda image: proc_img(image, scale_params, svc, X_scaler, orient, pix_per_cell, cell_per_block, heat_thresh)).subclip(21,30)
+    output_clip1.write_videofile(output_file1, audio=False)
+    """
+    output_file1 = 'project_video_output.mp4'
+    output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image)).subclip(24, 28)
+    #output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image)).subclip(12, 18)
+    output_clip1.write_videofile(output_file1, audio=False)
 
-"""
-TEST SUMMARY
-
-[frame thresh, temporal thresh, hist buff size]
-
-[4, 40, 15]
-- works decently, but false fails in shadows near end of video
-- focus is mostly on back of car
-- box is jittery; may need to implement a filter on box size
 
