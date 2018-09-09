@@ -94,6 +94,33 @@ if plot2:
     
     
     
+    
+    
+########## COLOR FEATURES ##########
+
+def color_hist(img, nbins=32, bins_range=(0, 1)):
+    
+    
+    image = cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
+    
+    image = image.astype(np.float32)/255.0
+    
+    
+    # Compute the histogram of the color channels separately
+    #channel1_hist = np.histogram(image[:,:,0], bins=nbins, range=bins_range)
+    channel2_hist = np.histogram(image[:,:,1], bins=nbins, range=bins_range)
+    channel3_hist = np.histogram(image[:,:,2], bins=nbins, range=bins_range)
+    
+    
+
+    
+    # Concatenate the histograms into a single feature vector
+    #hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
+    hist_features = np.concatenate((channel2_hist[0], channel3_hist[0]))
+    #hist_features = channel1_hist[0]
+    # Return the individual histograms, bin_centers and feature vector
+    return hist_features
+
 ######### FEATURE EXTRACTION ##########
 
 """
@@ -109,6 +136,8 @@ def extract_features(imgs, cspace='RGB', orient=9,
     for file in imgs:
         # Read in each one by one
         image = mpimg.imread(file)
+        
+        #print(np.amax(image))
         # apply color conversion if other than 'RGB'
         if cspace != 'RGB':
             if cspace == 'HSV':
@@ -136,7 +165,13 @@ def extract_features(imgs, cspace='RGB', orient=9,
         else:
             hog_features = get_hog_features(feature_image[:,:,hog_channel], orient, 
                         pix_per_cell, cell_per_block, vis=False, feature_vec=True)
+        
+        
+        #color_features = color_hist(image)
+        
+        
         # Append the new feature vector to the features list
+        #features.append(np.concatenate((hog_features, color_features)))
         features.append(hog_features)
     # Return list of feature vectors
     return features
@@ -259,7 +294,7 @@ from moviepy.editor import VideoFileClip
 
 # Times for frames to extract
 #times = [15, 20, 25, 30, 35, 40]
-times = [24.2, 24.5, 24.8, 25.1, 25.4, 25.7]
+times = [24, 24.4, 24.8, 25.2, 25.6, 26, 26.4]
 clip1 = VideoFileClip("project_video.mp4")
 
 raw_imgs = []
@@ -319,6 +354,7 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
     # Normalize the image
     img = img.astype(np.float32)/255.0
     
+    
     # List of all the boxes searched
     boxes = []
     
@@ -330,13 +366,17 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
         ystop = param[1]
         scale = param[2]
         cell_step = param[3]
+        xmargin = param[4]
         
         #print("ystart", ystart)
         #print("ystop", ystop)
         #print("scale", scale)
         
-        img_tosearch = img[ystart:ystop,:,:]
-        ctrans_tosearch = convert_color(img_tosearch, conv='RGB2YUV')
+        if xmargin == 0:
+            clr_tosearch = img[ystart:ystop,:,:]
+        else:
+            clr_tosearch = img[ystart:ystop,xmargin:-xmargin,:]
+        ctrans_tosearch = convert_color(clr_tosearch, conv='RGB2YUV')
         #plt.imshow(ctrans_tosearch)
         #plt.show()
         
@@ -345,6 +385,7 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
         if scale != 1:
             imshape = ctrans_tosearch.shape
             ctrans_tosearch = cv2.resize(ctrans_tosearch, (np.int(imshape[1]/scale), np.int(imshape[0]/scale)))
+            #clr_tosearch = cv2.resize(clr_tosearch, (np.int(imshape[1]/scale), np.int(imshape[0]/scale)))
         
         #print("Search window shape after scaling:", ctrans_tosearch.shape)
         #plt.imshow(ctrans_tosearch)
@@ -388,19 +429,19 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
                 ytop = ypos*pix_per_cell
     
                 # Extract the image patch
-                #subimg = cv2.resize(ctrans_tosearch[ytop:ytop+window, xleft:xleft+window], (64,64))
+                #subimg = cv2.resize(clr_tosearch[ytop:ytop+window, xleft:xleft+window], (64,64))
               
                 # Get color features
                 #spatial_features = bin_spatial(subimg, size=spatial_size)
-                #hist_features = color_hist(subimg, nbins=hist_bins)
+                #color_features = color_hist(subimg)
     
                 # Scale features and make a prediction
                 #test_features = scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))    
-                #test_features = scaler.transform(np.hstack((shape_feat, hist_feat)).reshape(1, -1))
+                #test_features = scaler.transform(np.hstack((hog_features, color_features)).reshape(1, -1))
                 test_features = scaler.transform(hog_features.reshape(1,-1))
                 test_prediction = svc.predict(test_features)
                 
-                xbox_left = np.int(xleft*scale)
+                xbox_left = np.int((xleft+xmargin)*scale)
                 ytop_draw = np.int(ytop*scale)
                 win_draw = np.int(window*scale)
                 
@@ -424,18 +465,26 @@ hog_channel = "ALL" # Can be 0, 1, 2, or "ALL"
 
 #               [ystart, ystop, scale, cell step]
 
-scale_params = [[400, 464, 1.0, 1.0],  # Scale 1.0 -> search rectangle is 64x64 pixels.
-                [410, 480, 1.0, 1.0]]
-"""scale_params = [[400, 464, 1.0, 1.0],  # Scale 1.0 -> search rectangle is 64x64 pixels.
-                [410, 480, 1.0, 1.0]]
-                [390, 500, 1.5, 1.0], # Scale 1.5 -> search rectangle is 96x96 pixels.
-                [410, 515, 1.5, 1.0],
-                [400, 530, 2.0, 1.0], # Scale 2.0 -> search rectangle is 128x128 pixels.
-                [430, 560, 2.0, 1.0],
-                [420, 590, 2.5, 1.0], # Scale 2.5 -> search rectangle is 160x160 pixels.
-                [480, 650, 2.5, 1.0],
-                [430, 630, 3.0, 1.0], # Scale 3.0 -> search rectangle is 192x192 pixels.
-                [510, 720, 3.0, 1.0]]
+
+scale_params = [[400, 470, 1.0, 1.5, 100],
+                [415, 485, 1.0, 1.5, 100],
+                [400, 500, 1.5, 1.25, 50],
+                [430, 510, 1.5, 1.25, 50],
+                [400, 530, 2.0, 1.0, 25],
+                [430, 560, 2.0, 1.0, 25],
+                [400, 650, 3.5, 1.0, 0],
+                [450, 700, 3.5, 1.0, 0]]
+
+
+"""
+scale_params =  [[400, 480, 1.25, 1.5],  # Scale 1.0 -> search rectangle is 64x64 pixels.
+                 [410, 490, 1.25, 1.5],
+                 [380, 500, 1.5, 1.5], # Scale 1.5 -> search rectangle is 96x96 pixels.
+                 [400, 515, 1.5, 1.5],
+                 [380, 520, 1.75, 1.25], # Scale 2.0 -> search rectangle is 128x128 pixels.
+                 [415, 545, 1.75, 1.25],
+                 [390, 570, 2.0, 1.0], # Scale 2.5 -> search rectangle is 160x160 pixels.
+                 [430, 610, 2.0, 1.0]]
 """
 
 all_box_imgs = []
@@ -448,10 +497,10 @@ for img in raw_imgs:
     all_box_imgs.append(draw_boxes(img, all_box, rainbow=True))
     hit_box_imgs.append(draw_boxes(img, hit_box))
     
-plot3 = False
+plot3 = True
 if plot3:
-    plot_imgs(all_box_imgs, cols=2)
-    plot_imgs(hit_box_imgs, cols=2)
+    plot_imgs(all_box_imgs, cols=3, h_mult=3.0)
+    plot_imgs(hit_box_imgs, cols=3, h_mult=3.0)
 
 
 
@@ -551,30 +600,23 @@ class VehicleTracker:
         self.pix_per_cell = HOG_PIX
         self.cell_per_block = HOG_CELLS
         self.hog_channel = "ALL"
-        self.scale_params = [[400, 480, 1.25, 0.8],  # Scale 1.0 -> search rectangle is 64x64 pixels.
-                             [410, 490, 1.25, 0.8],
-                             [380, 500, 1.5, 0.9], # Scale 1.5 -> search rectangle is 96x96 pixels.
-                             [400, 515, 1.5, 0.9],
-                             [380, 520, 1.75, 1.25], # Scale 2.0 -> search rectangle is 128x128 pixels.
-                             [415, 545, 1.75, 1.25],
-                             [390, 570, 2.0, 1.25], # Scale 2.5 -> search rectangle is 160x160 pixels.
-                             [430, 610, 2.0, 1.25],
-                             [420, 590, 2.5, 0.8], # Scale 2.5 -> search rectangle is 160x160 pixels.
-                             [480, 650, 2.5, 0.8]]
+        self.scale_params = scale_params # Scale 2.5 -> search rectangle is 160x160 pixels.
+
+                            
         
         # Heat map threshold for an individual image
-        self.frame_heat_thresh = 4
+        self.frame_heat_thresh = 2
         
         # Heat map thershold for heat accumulation acros frames
-        self.temporal_heat_thresh = 22
+        self.temporal_heat_thresh = 10
 
         # Labels from last good run
         self.labels = None
         
         # Size of history buffer
-        self.hist_buff_size = 10
+        self.hist_buff_size = 15
         self.rect_hist = [] # this will end up being a list of lists...
-        self.hist_scale = 0.6
+        self.hist_scale = 0.85
         
 
 
@@ -646,22 +688,14 @@ class VehicleTracker:
 
 
 
-
-
-
 proc_video = VIDEO
 
 if proc_video:
     tracker = VehicleTracker(svc, X_scaler)
     
-    """
     output_file1 = 'project_video_output.mp4'
-    output_clip1 = clip1.fl_image(lambda image: proc_img(image, scale_params, svc, X_scaler, orient, pix_per_cell, cell_per_block, heat_thresh)).subclip(21,30)
-    output_clip1.write_videofile(output_file1, audio=False)
-    """
-    output_file1 = 'project_video_output.mp4'
-    output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image)).subclip(24, 28)
-    #output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image)).subclip(12, 18)
+    #output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image)).subclip(24,28)
+    output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image)).subclip(10, 20)
     output_clip1.write_videofile(output_file1, audio=False)
 
 
