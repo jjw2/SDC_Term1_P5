@@ -6,26 +6,46 @@ import math
 from dask.array.ufunc import floor
 
 
+########## GLOBAL PARAMETERS ##########
 
+# Load features and classifier if true; otherwise, extract features and train 
 LOAD = True
-VIDEO = True
 
+# Filename for loading or saving features and classifer
+svc_filename = "saves/svc.pkl"
+feat_filename = "saves/features.pkl"
+
+# Plot images throughout
+PLOT = True
+
+# Process the video if true; False used only for plotting/debugging
+VIDEO = True
+OUTPUT_VIDEO = 'project_video_output.mp4'
+
+# HOG parameters
 HOG_COLOR = "YUV"
 HOG_ORIENT = 11
 HOG_PIX = 16
 HOG_CELLS = 2
+HOG_CHANNEL = "All"
 
-scale_params = [[390, 470, 1.1, 1.0, 250],
+# Sliding window parameters
+# [0] -> ystart
+# [1] -> ystop
+# [2] -> scale
+# [3] -> cell spacing
+# [4] -> xmargin - narrows x search region by this number of pixels on each side of the image
+
+
+
+SCALE_PARAMS = [[390, 470, 1.1, 1.0, 250],
                 [400, 480, 1.1, 1.0, 250],
                 [415, 500, 1.1, 1.0, 250],
-                [400, 500, 1.5, 1.5, 0],
-                [430, 510, 1.5, 1.5, 0],
-                [410, 540, 1.8, 1.25, 0],
-                [440, 570, 1.8, 1.25, 0],
-                [420, 590, 2.0, 1.0, 0],
-                [470, 640, 2.0, 1.0, 0]]
-
-
+                [390, 500, 1.5, 1.4, 0],
+                [420, 530, 1.5, 1.4, 0],
+                [390, 540, 1.8, 1.25, 0],
+                [410, 570, 1.8, 1.25, 0],
+                [420, 600, 2.0, 1.0, 0]]
 
 
 
@@ -33,20 +53,26 @@ scale_params = [[390, 470, 1.1, 1.0, 250],
 
 ########## PLOTTING UTILITIES ##########
 
-def plot_imgs(X, title=[], cols = 2, cmap='brg', h_mult = 2.5):
+
+# Genearl function for plotting an array of images.
+def plot_imgs(X, title=[], subtitle=[], cols=2, cmap='brg', size=(11,3)):
     
     num_cols = cols
     num_plots = len(X)
     num_rows = int(math.ceil(num_plots/2))
     
     plotNum = 1
-    plt.figure(figsize = (12, num_rows*h_mult))
+    plt.figure(figsize = size)
+
     for i in range(num_plots):
         plt.subplot(num_rows, num_cols, plotNum)
         plt.imshow(X[i], cmap=cmap)
-        if(title):
-            plt.title(title[i])
+        if(subtitle):
+            plt.title(subtitle[i])
         plotNum = plotNum + 1
+    
+    if(title):
+        plt.suptitle(title)
         
     plt.show()
 
@@ -56,13 +82,10 @@ def plot_imgs(X, title=[], cols = 2, cmap='brg', h_mult = 2.5):
 
 import glob 
 
-#veh_imgs = glob.glob("data_lesson/vehicles/**/*.jpeg")
-#nonveh_imgs = glob.glob("data_lesson/non-vehicles/**/*.jpeg")
 veh_imgs = glob.glob("data/vehicles/**/*.png")
 nonveh_imgs = glob.glob("data/non-vehicles/**/*.png")
 
 print("Dataset contains", len(veh_imgs), "vehicles and", len(nonveh_imgs), "non-vehicles.")
-
 
 
 ########## HOG FEATURES ##########
@@ -89,69 +112,73 @@ def get_hog_features(img, orient, pix_per_cell, cell_per_block, vis=True,
         return hog_features
 
 
-# Generate a random index to look at a car image
-test_idx = 2;
+# Pick some images from the dataset for plotting
+veh_idx = 0;
+nonveh_idx = 10;
+
 # Read in the image
-image = mpimg.imread(veh_imgs[test_idx])
+veh_img = mpimg.imread(veh_imgs[veh_idx])
+nonveh_img = mpimg.imread(nonveh_imgs[nonveh_idx])
 
-print("Image size:", image.shape)
+veh_gray = cv2.cvtColor(veh_img, cv2.COLOR_RGB2GRAY)
+nonveh_gray = cv2.cvtColor(nonveh_img, cv2.COLOR_RGB2GRAY)
 
-gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+# Call function with vis=True to see an image output
+features, veh_hog_img = get_hog_features(veh_gray, orient= 11, 
+                        pix_per_cell= 16, cell_per_block= 2, 
+                        vis=True, feature_vec=False)
 
-# Call our function with vis=True to see an image output
-features, hog_image = get_hog_features(gray, orient= 9, 
-                        pix_per_cell= 8, cell_per_block= 2, 
+features, nonveh_hog_img = get_hog_features(nonveh_gray, orient= 11, 
+                        pix_per_cell= 16, cell_per_block= 2, 
                         vis=True, feature_vec=False)
 
 
 # Plot the examples
-
-plot2 = False
-
-if plot2:
-    fig = plt.figure()
+PLOT
+if PLOT:
+    fig = plt.figure(figsize = (6, 2.5))
     plt.subplot(121)
-    plt.imshow(image, cmap='gray')
-    plt.title('Example Car Image')
+    plt.imshow(veh_img, cmap='gray')
+    plt.title('Example Vehicle Image')
     plt.subplot(122)
-    plt.imshow(hog_image, cmap='gray')
+    plt.imshow(veh_hog_img, cmap='gray')
+    plt.title('HOG Visualization')
+    plt.show()
+    
+    fig = plt.figure(figsize = (6, 2.5))
+    plt.subplot(121)
+    plt.imshow(nonveh_img, cmap='gray')
+    plt.title('Example Non-Vehicle Image')
+    plt.subplot(122)
+    plt.imshow(nonveh_hog_img, cmap='gray')
     plt.title('HOG Visualization')
     plt.show()
     
     
-    
-    
-    
 ########## COLOR FEATURES ##########
+"""
+NOTE: while I experimented with extracting and using color features, I found that this didn't help improve
+accuracy during video processing. I've left the code here, but it is unused.
+"""
 
 def color_hist(img, nbins=32, bins_range=(0, 1)):
     
-    
+    # Convert and scale image
     image = cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
-    
     image = image.astype(np.float32)/255.0
     
-    
     # Compute the histogram of the color channels separately
-    #channel1_hist = np.histogram(image[:,:,0], bins=nbins, range=bins_range)
+    channel1_hist = np.histogram(image[:,:,0], bins=nbins, range=bins_range)
     channel2_hist = np.histogram(image[:,:,1], bins=nbins, range=bins_range)
     channel3_hist = np.histogram(image[:,:,2], bins=nbins, range=bins_range)
-    
-    
 
-    
     # Concatenate the histograms into a single feature vector
-    #hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
-    hist_features = np.concatenate((channel2_hist[0], channel3_hist[0]))
-    #hist_features = channel1_hist[0]
-    # Return the individual histograms, bin_centers and feature vector
+    hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
+
     return hist_features
 
+
 ######### FEATURE EXTRACTION ##########
-
-"""
-
-"""
 
 
 def extract_features(imgs, cspace='RGB', orient=9, 
@@ -195,7 +222,6 @@ def extract_features(imgs, cspace='RGB', orient=9,
         
         #color_features = color_hist(image)
         
-        
         # Append the new feature vector to the features list
         #features.append(np.concatenate((hog_features, color_features)))
         features.append(hog_features)
@@ -212,24 +238,12 @@ from sklearn.svm import LinearSVC
 import time 
 import pickle
 
-# Feature extraction parameters
 
 
+print('Using:', HOG_ORIENT,'orientations', HOG_PIX,
+    'pixels per cell and', HOG_CELLS, 'cells per block')
 
-
-colorspace = HOG_COLOR # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
-orient = HOG_ORIENT
-pix_per_cell = HOG_PIX
-cell_per_block = HOG_CELLS
-hog_channel = "ALL" # Can be 0, 1, 2, or "ALL"
-
-print('Using:',orient,'orientations',pix_per_cell,
-    'pixels per cell and', cell_per_block,'cells per block')
-
-load_feat = LOAD
-feat_filename = "saves/features.pkl"
-
-if load_feat:
+if LOAD:
     
     X_train, X_test, y_train, y_test = pickle.load(open(feat_filename, 'rb'))
     print("Features loaded from", feat_filename)
@@ -238,12 +252,12 @@ else:
 
     print("Extracting features...")
     t=time.time()
-    veh_feat = extract_features(veh_imgs, cspace=colorspace, orient=orient, 
-                            pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, 
-                            hog_channel=hog_channel)
-    nonveh_feat = extract_features(nonveh_imgs, cspace=colorspace, orient=orient, 
-                            pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, 
-                            hog_channel=hog_channel)
+    veh_feat = extract_features(veh_imgs, cspace=HOG_COLOR, orient=HOG_ORIENT, 
+                            pix_per_cell=HOG_PIX, cell_per_block=HOG_CELLS, 
+                            hog_channel=HOG_CHANNEL)
+    nonveh_feat = extract_features(nonveh_imgs, cspace=HOG_COLOR, orient=HOG_ORIENT, 
+                            pix_per_cell=HOG_PIX, cell_per_block=HOG_CELLS, 
+                            hog_channel=HOG_CHANNEL)
     t2 = time.time()
     print(round(t2-t, 2), 'seconds to extract features...')
     
@@ -263,32 +277,36 @@ else:
     print("Features saved to", feat_filename)
 
 
+print('Feature vector length:', len(X_train[0]))
+
+
+"""
+I found that when using only HOG features, applying a scaler resulted in more false positives.
+If additional features (such as color histogram features) were added, I'd apply the scalar.
+See the README for more discussion.
+"""
+
 # Fit a per-column scaler on only the training data
 # Data was saved before this operation because we want the scaler to be available for use later
-X_scaler = StandardScaler().fit(X_train)
+#X_scaler = StandardScaler().fit(X_train)
 
 # Apply the scaler to X
 #X_train = X_scaler.transform(X_train)
 #X_test = X_scaler.transform(X_test)
     
     
-print('Feature vector length:', len(X_train[0]))
-
 
 
 ########## CLASSIFIER TRAINING ##########
 
-# choose to train or load a classifer
-load_svc = LOAD
-svc_filename = "saves/svc.pkl"
+# Train or load a classifer
 
-if load_svc:
-    
+if LOAD:
     print("Loading classifier", svc_filename)
     svc = pickle.load(open(svc_filename, "rb" ))
 
 else:
-    print("Training SVC classifier...")
+    print("Training classifier...")
     # Use a linear SVC 
     svc = LinearSVC()
     # Check the training time for the SVC
@@ -303,28 +321,23 @@ else:
     
 
 # Check the score of the SVC
-print('Test Accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
+print('Test Accuracy of classifier = ', round(svc.score(X_test, y_test), 4))
 
 
+########## FINDING CARS IN A SINGLE FRAME ##########
 
-########## FIND CARS IN SINGLE IMAGE ##########
-
-# First, grab some images out of the video
 from moviepy.editor import VideoFileClip
 
-# Times for frames to extract
-#times = [15, 20, 25, 30, 35, 40]
-times = [24, 25, 26, 27, 28, 29]
+# Extract frames from the video for plotting
+times = [26, 30]
 clip1 = VideoFileClip("project_video.mp4")
 
 raw_imgs = []
-
 for time in times:
     raw_imgs.append(clip1.get_frame(time))
 
-plot0 = False
-if plot0:
-    plot_imgs(raw_imgs, cols=3)
+if PLOT:
+    plot_imgs(raw_imgs, title="Sample Images")
 
 
 # Helper function to draw bounding boxes
@@ -346,16 +359,8 @@ bboxes = [((275, 572), (380, 510)), ((488, 563), (549, 518)), ((554, 543), (582,
           ((601, 555), (646, 522)), ((657, 545), (685, 517)), ((849, 678), (1135, 512))]
 
 
-image = mpimg.imread('bbox-example-image.jpg')
-result = draw_boxes(image, bboxes)
 
-plot1 = False
-if plot1:
-    plt.imshow(result)
-    plt.show()
-
-
-
+# Helper function to conver color spaces
 def convert_color(img, conv='RGB2YCrCb'):
     if conv == 'RGB2YCrCb':
         return cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
@@ -369,16 +374,16 @@ def convert_color(img, conv='RGB2YCrCb'):
         return cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
 
-def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
+# Function that implements sliding window technique to classify vehicles in images
+def find_cars(img, params, svc, orient, pix_per_cell, cell_per_block, scaler=None):
     
     # Normalize the image
     img = img.astype(np.float32)/255.0
     
-    
     # List of all the boxes searched
     boxes = []
     
-    # Store indices of detected vehicles
+    # List of detected vehicles
     detections = []
     
     for param in params:
@@ -388,38 +393,33 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
         cell_step = param[3]
         xmargin = param[4]
         
-        #print("ystart", ystart)
-        #print("ystop", ystop)
-        #print("scale", scale)
-        
+        # Apply a margin to the left and right sides of if the image, if arg is passed
         if xmargin == 0:
             clr_tosearch = img[ystart:ystop,:,:]
         else:
             clr_tosearch = img[ystart:ystop,xmargin:-xmargin,:]
+            
+        # Convert to YUV space
         ctrans_tosearch = convert_color(clr_tosearch, conv='RGB2YUV')
-        #plt.imshow(ctrans_tosearch)
-        #plt.show()
+
         
-        #print("Search window shape before scaling:", ctrans_tosearch.shape)
-        
+        # Rescale images if scale is not 1
         if scale != 1:
             imshape = ctrans_tosearch.shape
             ctrans_tosearch = cv2.resize(ctrans_tosearch, (np.int(imshape[1]/scale), np.int(imshape[0]/scale)))
             #clr_tosearch = cv2.resize(clr_tosearch, (np.int(imshape[1]/scale), np.int(imshape[0]/scale)))
-        
-        #print("Search window shape after scaling:", ctrans_tosearch.shape)
-        #plt.imshow(ctrans_tosearch)
-        #plt.plot()
-            
+
+        # Separate channels to extract HOG features
         ch1 = ctrans_tosearch[:,:,0]
         ch2 = ctrans_tosearch[:,:,1]
         ch3 = ctrans_tosearch[:,:,2]
     
-        # Define blocks and steps as above
+        # Define blocks and steps
         nxblocks = (ch1.shape[1] // pix_per_cell) - cell_per_block + 1
         nyblocks = (ch1.shape[0] // pix_per_cell) - cell_per_block + 1 
         
-        # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
+        # Images are 64x64 pixels
+        # Calculate number of sliding windows in x and y directions
         window = 64
         nblocks_per_window = (window // pix_per_cell) - cell_per_block + 1
         cells_per_step_x = cell_step  
@@ -427,18 +427,18 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
         nxsteps = int(floor((nxblocks - nblocks_per_window) / cells_per_step_x + 1))
         nysteps = int(floor((nyblocks - nblocks_per_window) / cells_per_step_y + 1))
         
-        #print("nxsteps:", nxsteps)
-        #print("nysteps:", nysteps)
-        
         # Compute individual channel HOG features for the entire image
+        # This is done once here befores sliding windows are applied in order to save execution time
         hog1 = get_hog_features(ch1, orient, pix_per_cell, cell_per_block, vis=False, feature_vec=False)
         hog2 = get_hog_features(ch2, orient, pix_per_cell, cell_per_block, vis=False, feature_vec=False)
         hog3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, vis=False, feature_vec=False)
         
+        # Step through each window and apply the classifier
         for xb in range(nxsteps):
             for yb in range(nysteps):
                 ypos = int(yb*cells_per_step_y)
                 xpos = int(xb*cells_per_step_x)
+                
                 # Extract HOG for this patch
                 hog_feat1 = hog1[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
                 hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
@@ -448,6 +448,8 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
                 xleft = xpos*pix_per_cell
                 ytop = ypos*pix_per_cell
     
+                # Uncomment code to use color histogram features
+                
                 # Extract the image patch
                 #subimg = cv2.resize(clr_tosearch[ytop:ytop+window, xleft:xleft+window], (64,64))
               
@@ -456,9 +458,12 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
                 #color_features = color_hist(subimg)
     
                 # Scale features and make a prediction
-                #test_features = scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))    
-                #test_features = scaler.transform(np.hstack((hog_features, color_features)).reshape(1, -1))
-                test_features = hog_features.reshape(1,-1)
+                if scaler is not None:
+                    #test_features = scaler.transform(np.hstack((hog_features, color_features)).reshape(1, -1))
+                    test_features = scaler.transform(hog_features).reshape(1, -1)
+                else:
+                    test_features = hog_features.reshape(1,-1)
+               
                 test_prediction = svc.predict(test_features)
                 
                 xbox_left = np.int((xleft+xmargin)*scale)
@@ -474,48 +479,21 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
     return detections, boxes
 
 
-# Some of this was defined above, but redefining here for ease of use/clarity
-colorspace = HOG_COLOR
-orient = HOG_ORIENT
-pix_per_cell = HOG_PIX
-cell_per_block = HOG_CELLS
-hog_channel = "ALL" # Can be 0, 1, 2, or "ALL"
-# svc used from above
-# scaler used from above
-
-#               [ystart, ystop, scale, cell step]
-
-
-
-
-
-"""
-scale_params =  [[400, 480, 1.25, 1.5],  # Scale 1.0 -> search rectangle is 64x64 pixels.
-                 [410, 490, 1.25, 1.5],
-                 [380, 500, 1.5, 1.5], # Scale 1.5 -> search rectangle is 96x96 pixels.
-                 [400, 515, 1.5, 1.5],
-                 [380, 520, 1.75, 1.25], # Scale 2.0 -> search rectangle is 128x128 pixels.
-                 [415, 545, 1.75, 1.25],
-                 [390, 570, 2.0, 1.0], # Scale 2.5 -> search rectangle is 160x160 pixels.
-                 [430, 610, 2.0, 1.0]]
-"""
-
+# Apply the find_cars function to our test images
 all_box_imgs = []
 hit_box_imgs = []
 hit_boxes=[]
+
 for img in raw_imgs:
-    
-    hit_box, all_box = find_cars(img, scale_params, svc, X_scaler, orient, pix_per_cell, cell_per_block)
+    hit_box, all_box = find_cars(img, SCALE_PARAMS, svc, HOG_ORIENT, HOG_PIX, HOG_CELLS)
     hit_boxes.append(hit_box)
     all_box_imgs.append(draw_boxes(img, all_box, rainbow=True))
     hit_box_imgs.append(draw_boxes(img, hit_box))
-    
-plot3 = True
-if plot3:
-    plot_imgs(all_box_imgs, cols=3, h_mult=3.0)
-    plot_imgs(hit_box_imgs, cols=3, h_mult=3.0)
 
 
+if PLOT:
+    plot_imgs(all_box_imgs, title="All Boxes", cols=2)
+    plot_imgs(hit_box_imgs, title="All Hits", cols=2)
 
 
 
@@ -574,10 +552,9 @@ for i in range(len(hit_boxes)):
     label_imgs.append(draw_labeled_bboxes(raw_imgs[i], labels))
 
 
-plot4 = False
-if plot4:   
-    plot_imgs(heatmap_imgs, cols=3)
-    plot_imgs(label_imgs, cols=3)
+if PLOT:   
+    plot_imgs(heatmap_imgs, title="Heatmapped Images", cols=2)
+    plot_imgs(label_imgs, title="Labelled Images", cols=2)
     
 
 # Combine above functions into one function
@@ -591,9 +568,9 @@ def create_labels(img, rects, thresh):
     return output 
     
     
-########## CREATE CLASS TO TRACK VEHICLES ##########
+########## VEHICLE TRACKING ##########
 """
-The VehicleTracker class below is sloppy in that its using a several functions that are not
+The VehicleTracker class below is sloppy in that its using several functions that are not
 a part of the class (i.e.: all the functions above). Ideally, I would make all of these functions 
 class methods, but at this point, and given that I developed the above code step-by-step as I 
 progressed through the lessons, I'm goign to leave it as is. If this were to be deployed, I would
@@ -601,24 +578,19 @@ enforce proper encapsulation.
 """
 
 class VehicleTracker:
-    def __init__(self, classifier, scaler):
+    def __init__(self, classifier):
         
         # Pass the classifier and scaler as initialization arguments.
         self.classifier = classifier
-        self.scaler = scaler
         
         # HOG parameters - duplicated from above
         self.colorspace = HOG_COLOR
         self.orient = HOG_ORIENT
         self.pix_per_cell = HOG_PIX
         self.cell_per_block = HOG_CELLS
-        self.hog_channel = "ALL"
-        self.scale_params = scale_params # Scale 2.5 -> search rectangle is 160x160 pixels.
+        self.hog_channel = HOG_CHANNEL
+        self.scale_params = SCALE_PARAMS 
 
-                            
-        
-        # Heat map threshold for an individual image
-        self.frame_heat_thresh = 5
         
         # Heat map thershold for heat accumulation acros frames
         self.temporal_heat_thresh = 22
@@ -635,7 +607,7 @@ class VehicleTracker:
 
     # Returns bounding boxes for an individual image
     def get_rects(self, img):
-        rects, _ = find_cars(img, self.scale_params, self.classifier, self.scaler, self.orient, self.pix_per_cell, self.cell_per_block)
+        rects, _ = find_cars(img, self.scale_params, self.classifier, self.orient, self.pix_per_cell, self.cell_per_block)
         return rects
     
     def push_rects(self, rects):
@@ -672,24 +644,10 @@ class VehicleTracker:
             # Heatmap for accumulating heat across frames
             
             heatmap = self.accum_heat()
-            
-            """
-            plt.figure()
-            plt.title("Before thresholding")
-            plt.imshow(heatmap)
-            plt.show()
-            """
-            
+        
             heatmap = heat_threshold(heatmap, self.temporal_heat_thresh)
             heatmap = np.clip(heatmap, 0, 255)
         
-            """
-            plt.figure()
-            plt.title("After thresholding")
-            plt.imshow(heatmap)
-            plt.show()
-            """
-            
             self.labels = label(heatmap)
         
         if self.labels is not None:
@@ -701,14 +659,10 @@ class VehicleTracker:
 
 
 
-proc_video = VIDEO
-
-if proc_video:
-    tracker = VehicleTracker(svc, X_scaler)
-    
-    output_file1 = 'project_video_output.mp4'
-    #output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image)).subclip(24,28)
-    output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image))#.subclip(24,50)
+if VIDEO:
+    tracker = VehicleTracker(svc)
+    output_file1 = OUTPUT_VIDEO
+    output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image))
     output_clip1.write_videofile(output_file1, audio=False)
 
 
