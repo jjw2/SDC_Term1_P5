@@ -5,6 +5,32 @@ import matplotlib.image as mpimg
 import math
 from dask.array.ufunc import floor
 
+
+
+LOAD = True
+VIDEO = True
+
+HOG_COLOR = "YUV"
+HOG_ORIENT = 11
+HOG_PIX = 16
+HOG_CELLS = 2
+
+scale_params = [[390, 470, 1.1, 1.0, 250],
+                [400, 480, 1.1, 1.0, 250],
+                [415, 500, 1.1, 1.0, 250],
+                [400, 500, 1.5, 1.5, 0],
+                [430, 510, 1.5, 1.5, 0],
+                [410, 540, 1.8, 1.25, 0],
+                [440, 570, 1.8, 1.25, 0],
+                [420, 590, 2.0, 1.0, 0],
+                [470, 640, 2.0, 1.0, 0]]
+
+
+
+
+
+
+
 ########## PLOTTING UTILITIES ##########
 
 def plot_imgs(X, title=[], cols = 2, cmap='brg', h_mult = 2.5):
@@ -188,13 +214,7 @@ import pickle
 
 # Feature extraction parameters
 
-LOAD = True
-VIDEO = True
 
-HOG_COLOR = "YUV"
-HOG_ORIENT = 11
-HOG_PIX = 16
-HOG_CELLS = 2
 
 
 colorspace = HOG_COLOR # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
@@ -248,8 +268,8 @@ else:
 X_scaler = StandardScaler().fit(X_train)
 
 # Apply the scaler to X
-X_train = X_scaler.transform(X_train)
-X_test = X_scaler.transform(X_test)
+#X_train = X_scaler.transform(X_train)
+#X_test = X_scaler.transform(X_test)
     
     
 print('Feature vector length:', len(X_train[0]))
@@ -294,7 +314,7 @@ from moviepy.editor import VideoFileClip
 
 # Times for frames to extract
 #times = [15, 20, 25, 30, 35, 40]
-times = [24, 24.4, 24.8, 25.2, 25.6, 26, 26.4]
+times = [24, 25, 26, 27, 28, 29]
 clip1 = VideoFileClip("project_video.mp4")
 
 raw_imgs = []
@@ -438,7 +458,7 @@ def find_cars(img, params, svc, scaler, orient, pix_per_cell, cell_per_block):
                 # Scale features and make a prediction
                 #test_features = scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))    
                 #test_features = scaler.transform(np.hstack((hog_features, color_features)).reshape(1, -1))
-                test_features = scaler.transform(hog_features.reshape(1,-1))
+                test_features = hog_features.reshape(1,-1)
                 test_prediction = svc.predict(test_features)
                 
                 xbox_left = np.int((xleft+xmargin)*scale)
@@ -466,14 +486,7 @@ hog_channel = "ALL" # Can be 0, 1, 2, or "ALL"
 #               [ystart, ystop, scale, cell step]
 
 
-scale_params = [[400, 470, 1.0, 1.5, 100],
-                [415, 485, 1.0, 1.5, 100],
-                [400, 500, 1.5, 1.25, 50],
-                [430, 510, 1.5, 1.25, 50],
-                [400, 530, 2.0, 1.0, 25],
-                [430, 560, 2.0, 1.0, 25],
-                [400, 650, 3.5, 1.0, 0],
-                [450, 700, 3.5, 1.0, 0]]
+
 
 
 """
@@ -605,18 +618,18 @@ class VehicleTracker:
                             
         
         # Heat map threshold for an individual image
-        self.frame_heat_thresh = 2
+        self.frame_heat_thresh = 5
         
         # Heat map thershold for heat accumulation acros frames
-        self.temporal_heat_thresh = 10
+        self.temporal_heat_thresh = 22
 
         # Labels from last good run
         self.labels = None
         
         # Size of history buffer
-        self.hist_buff_size = 15
+        self.hist_buff_size = 10
         self.rect_hist = [] # this will end up being a list of lists...
-        self.hist_scale = 0.85
+        self.hist_scale = 0.95
         
 
 
@@ -695,7 +708,7 @@ if proc_video:
     
     output_file1 = 'project_video_output.mp4'
     #output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image)).subclip(24,28)
-    output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image)).subclip(10, 20)
+    output_clip1 = clip1.fl_image(lambda image: tracker.proc_img(image))#.subclip(24,50)
     output_clip1.write_videofile(output_file1, audio=False)
 
 
