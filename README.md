@@ -114,7 +114,19 @@ The results are not perfect, and possible improvements are discussed below.
 
 ## 7. Discussion
 
+Here, several challenges and potential improvements are discussed.
 
+**Classification**
+Classification was a source of frustration during this project. I didn't find the use of Linear SVM classifier using HOG features with or without color histograms to be incredibly robust, and I'm relatively certain that the classification process could be improved through the use of neural networks and machine learning. Now, this might require that a GPU is available to execute the model once it's trained in order to process enough frames (depending on the complexity of the network of course), but this shouldn't be an issue.
+
+**Training Data**
+It could very well be that the frustration I experienced with the SVM classifier could have been resolved with additional data (and additional data would be an asset for a neural network approach as well). While ultimately I decided not to pull in additional data (found [here](https://github.com/udacity/self-driving-car/tree/master/annotations), for example) this may improve performance.
+
+**Vehicle Centroid and Bounding Boxes**
+Bounding boxes in the video change rapidly, and in some cases, multiple bounding boxes appear very close to each other. This is due to the admittedly unsophisticated technique that I used to simply accrue "heat" over time. A better approach for tracking vehicles over time could resolve this issue. For example, one could attempt to track vehicle centroids and bounding boxes over time, and use filters and other techniques to ensure that they don't change rapidly. For example, it's unreasonable to expect that the bounding box for a vehicle could reduce in size by half in one frame (though it's possible and does occur in what I've implemented), and one could use that knowledge to calculate more stable centroids and bounding boxes that don't change so rapidly over time.
+
+**Tuning and Applicability**
+Admittedly, it would be tough to argue that the pipeline is not *tuned* for this video. I spent quite a bit of time determining appropriate bounding box sizes, densities and placements, as well as heatmapping parameters. In many cases, I could tune the pipeline to perform excellently in one section of the video, but it would then fail in another section. Therefore, the final result ended up being a bit of a balancing act to ensure good behavior across the whole video. I wouldn't be surprised if the pipeline didn't perform as well on a different video, especially one with different environmental conditions (quality of daylight, etc). 
 
 [//]: # (Image References)
 
@@ -133,5 +145,3 @@ The results are not perfect, and possible improvements are discussed below.
 [image13]: ./md_imgs/all_hits.png "img"
 [image14]: ./md_imgs/heatmap.png "img"
 [image15]: ./md_imgs/labels.png "img"
-[image16]: ./md_imgs/hog_nonveh.png "img"
-[image17]: ./md_imgs/hog_nonveh.png "img"

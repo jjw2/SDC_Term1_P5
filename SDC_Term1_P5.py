@@ -20,7 +20,7 @@ PLOT = True
 
 # Process the video if true; False used only for plotting/debugging
 VIDEO = True
-OUTPUT_VIDEO = 'project_video_output.mp4'
+OUTPUT_VIDEO = 'project_video_output1.mp4'
 
 # HOG parameters
 HOG_COLOR = "YUV"
@@ -35,9 +35,6 @@ HOG_CHANNEL = "All"
 # [2] -> scale
 # [3] -> cell spacing
 # [4] -> xmargin - narrows x search region by this number of pixels on each side of the image
-
-
-
 SCALE_PARAMS = [[390, 470, 1.1, 1.0, 250],
                 [400, 480, 1.1, 1.0, 250],
                 [415, 500, 1.1, 1.0, 250],
@@ -50,9 +47,9 @@ SCALE_PARAMS = [[390, 470, 1.1, 1.0, 250],
 
 
 
-
+########################################
 ########## PLOTTING UTILITIES ##########
-
+########################################
 
 # Genearl function for plotting an array of images.
 def plot_imgs(X, title=[], subtitle=[], cols=2, cmap='brg', size=(11,3)):
@@ -77,8 +74,9 @@ def plot_imgs(X, title=[], subtitle=[], cols=2, cmap='brg', size=(11,3)):
     plt.show()
 
 
-    
+##########################################
 ########## IMPORT TRAINING DATA ##########
+##########################################
 
 import glob 
 
@@ -88,7 +86,9 @@ nonveh_imgs = glob.glob("data/non-vehicles/**/*.png")
 print("Dataset contains", len(veh_imgs), "vehicles and", len(nonveh_imgs), "non-vehicles.")
 
 
+##################################
 ########## HOG FEATURES ##########
+##################################
 
 from skimage.feature import hog 
 
@@ -154,8 +154,8 @@ if PLOT:
     plt.title('HOG Visualization')
     plt.show()
     
-    
-########## COLOR FEATURES ##########
+
+#COLOR FEATURES
 """
 NOTE: while I experimented with extracting and using color features, I found that this didn't help improve
 accuracy during video processing. I've left the code here, but it is unused.
@@ -177,9 +177,9 @@ def color_hist(img, nbins=32, bins_range=(0, 1)):
 
     return hist_features
 
-
+#######################################
 ######### FEATURE EXTRACTION ##########
-
+#######################################
 
 def extract_features(imgs, cspace='RGB', orient=9, 
                         pix_per_cell=8, cell_per_block=2, hog_channel=0):
@@ -229,8 +229,9 @@ def extract_features(imgs, cspace='RGB', orient=9,
     return features
 
 
-
+########################################
 ########## FEATURE EXTRACTION ##########
+########################################
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -296,8 +297,9 @@ See the README for more discussion.
     
     
 
-
+#########################################
 ########## CLASSIFIER TRAINING ##########
+#########################################
 
 # Train or load a classifer
 
@@ -323,8 +325,9 @@ else:
 # Check the score of the SVC
 print('Test Accuracy of classifier = ', round(svc.score(X_test, y_test), 4))
 
-
+####################################################
 ########## FINDING CARS IN A SINGLE FRAME ##########
+####################################################
 
 from moviepy.editor import VideoFileClip
 
@@ -497,7 +500,10 @@ if PLOT:
 
 
 
+
+##################################################
 ########## HEATMAPPING AND THRESHOLDING ##########
+##################################################
 
 from scipy.ndimage.measurements import label
 
@@ -567,8 +573,11 @@ def create_labels(img, rects, thresh):
     output = draw_labeled_bboxes(img, labels)
     return output 
     
-    
+
+
+######################################
 ########## VEHICLE TRACKING ##########
+######################################
 """
 The VehicleTracker class below is sloppy in that its using several functions that are not
 a part of the class (i.e.: all the functions above). Ideally, I would make all of these functions 
