@@ -3,9 +3,9 @@
 .pydevproject
 .ipynb_checkpoints
 /RemoteSystemsTempFiles
-/src/data
-/src/data_lesson
-/src/scratch.py
-/src/.DS_Store
-/src/saves
+/data
+/data_lesson
+/scratch.py
+/.DS_Store
+/saves
 .DS_Store
