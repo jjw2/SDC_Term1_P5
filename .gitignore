@@ -1,10 +1,9 @@
 /.metadata/
 .project
 .pydevproject
-.ipynb_checkpoints
-/RemoteSystemsTempFiles
 /data
-/data_lesson
 scratch.py
 /saves
 .DS_Store
+
+
